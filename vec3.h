@@ -33,8 +33,15 @@
  * ------------------------------------------------------------------------------------------------
  * File History:
  * @version 0.1
- * 2024-03-07- Raesangur
+ * 2024-03-07 - Raesangur
  *      - Initial implementation
+ *
+ * @version 0.2
+ * 2024-03-08 - Raesangur
+ *      - Fixing compilation issues
+ *      - Adding edge cases to angle function
+ *      - Added distance and lerp functions
+ *      - Moved comparison lambda in its own function
  * ===============================================================================================
  */
 #ifndef VEC3_H
@@ -47,6 +54,7 @@
 #include <cmath>
 #include <iostream>
 #include <limits>
+#include <numbers>
 
 
 /** -----------------------------------------------------------------------------------------------
@@ -71,8 +79,10 @@ public:
 
     constexpr T        magnitude() const;
     constexpr vec3<T>& normalize();
+    constexpr vec3<T>  lerp(const vec3<T>& rh, T t) const;
 
     constexpr T angle(const vec3<T>& rh) const;
+    constexpr T distance(const vec3<T>& rh) const;
 
     void print(std::ostream& os = std::cout) const;
 
@@ -88,6 +98,16 @@ public:
     constexpr inline vec3<T>& operator-=(const vec3<T>& rh);
     constexpr inline vec3<T>& operator*=(T scalar);
     constexpr inline vec3<T>& operator/=(T scalar);
+
+private:
+    constexpr inline bool comp(T a, T b, T epsilon = std::numeric_limits<T>::epsilon())
+    {
+        auto abs = [](T x) {
+            return x >= 0 ? x : -x;
+        };
+
+        return abs(a - b) <= epsilon;
+    }
 };
 
 
@@ -120,7 +140,7 @@ constexpr T vec3<T>::dot(const vec3<T>& rh) const
 template<typename T>
 constexpr vec3<T> vec3<T>::cross(const vec3<T>& rh) const
 {
-    return vec3{y * rh.z - rh.y * z, x * rh.z - rh.x * z, x * rh.y - rh.x - y};
+    return vec3{y * rh.z - rh.y * z, x * rh.z - rh.x * z, x * rh.y - rh.x * y};
 }
 
 
@@ -130,7 +150,7 @@ constexpr vec3<T> vec3<T>::cross(const vec3<T>& rh) const
 template<typename T>
 constexpr T vec3<T>::magnitude() const
 {
-    return std::sqrt(std::pow(x, 2) + std::pow(y, z) + std::pow(z, 2));
+    return std::sqrt(std::pow(x, 2) + std::pow(y, 2) + std::pow(z, 2));
 }
 
 /**
@@ -149,6 +169,19 @@ constexpr vec3<T>& vec3<T>::normalize()
 }
 
 /**
+ * @brief Calculate the linear interpolation between two vectors.
+ *        A `t` step of `0` means 100% of the resulting vector is from the original vector.
+ *        A `t` step of `1` means 100% of the resulting vector is from the `rh` vector.
+ *        A `t` inbetween means the resulting vector is somewhere in between.
+ */
+template<typename T>
+constexpr vec3<T> vec3<T>::lerp(const vec3<T>& rh, T t) const
+{
+    return *this + (rh - *this) * t;
+}
+
+
+/**
  * @brief Calculate the angle between two vectors.
  * @details This uses the fomula cos(theta) = (a.b) / (|a| * |b|).
  *
@@ -157,7 +190,34 @@ constexpr vec3<T>& vec3<T>::normalize()
 template<typename T>
 constexpr T vec3<T>::angle(const vec3<T>& rh) const
 {
-    return std::acos(dot(rh) / (magnitude() * rh.magnitude()));
+    T dotProduct = std::max(std::min(dot(rh), static_cast<T>(1.0)), static_cast<T>(-1.0));
+    if(comp(dotProduct, static_cast<T>(1.0)))
+    {
+        return static_cast<T>(0.0);        // Parallel vectors;
+    }
+    if(comp(dotProduct, static_cast<T>(0)))
+    {
+        return static_cast<T>(std::numbers::pi);        // Opposite vectors;
+    }
+    return std::acos(dotProduct / (magnitude() * rh.magnitude()));
+}
+
+/**
+ * @brief Calculate the distance between two vectors.
+ *
+ * @details This function creates a temporary vector between the ends of both vectors, and
+ *          calculates the magnitude of this temporary vector.
+ */
+template<typename T>
+constexpr T vec3<T>::distance(const vec3<T>& rh) const
+{
+    T dx = x - rh.x;
+    T dy = y - rh.y;
+    T dz = z - rh.z;
+
+    vec3<T> dV{dx, dy, dz};
+
+    return dV.magnitude();
 }
 
 
@@ -190,14 +250,6 @@ void vec3<T>::print(std::ostream& os) const
 template<typename T>
 constexpr inline bool vec3<T>::operator==(const vec3<T>& rh) const
 {
-    auto comp = [](T a, T b, T epsilon = std::numeric_limits<T>::epsilon()) {
-        auto abs = [](T x) {
-            return x >= 0 ? x : -x;
-        };
-
-        return abs(a - b) <= epsilon;
-    };
-
     return comp(x, rh.x) && comp(y, rh.y) && comp(z, rh.z);
 }
 
@@ -249,7 +301,7 @@ constexpr inline vec3<T> vec3<T>::operator-(const vec3<T>& rh) const
 template<typename T>
 constexpr inline vec3<T> vec3<T>::operator*(T const scalar) const
 {
-    return vec3{x * rh, y * rh, z * rh};
+    return vec3{x * scalar, y * scalar, z * scalar};
 }
 
 /**
@@ -258,7 +310,7 @@ constexpr inline vec3<T> vec3<T>::operator*(T const scalar) const
 template<typename T>
 constexpr inline vec3<T> vec3<T>::operator/(T const scalar) const
 {
-    return vec3{x / rh, y / rh, z / rh};
+    return vec3{x / scalar, y / scalar, z / scalar};
 }
 
 
@@ -292,9 +344,9 @@ constexpr inline vec3<T>& vec3<T>::operator-=(vec3<T> const& rh)
 template<typename T>
 constexpr inline vec3<T>& vec3<T>::operator*=(T scalar)
 {
-    x *= rh.x;
-    y *= rh.y;
-    z *= rh.z;
+    x *= scalar;
+    y *= scalar;
+    z *= scalar;
     return *this;
 }
 
@@ -304,9 +356,9 @@ constexpr inline vec3<T>& vec3<T>::operator*=(T scalar)
 template<typename T>
 constexpr inline vec3<T>& vec3<T>::operator/=(T scalar)
 {
-    x /= rh.x;
-    y /= rh.y;
-    z /= rh.z;
+    x /= scalar;
+    y /= scalar;
+    z /= scalar;
     return *this;
 }
 
